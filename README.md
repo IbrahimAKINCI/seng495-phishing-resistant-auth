@@ -29,12 +29,12 @@ cp .env.example .env        # then put your own SECRET_KEY in .env
 ## Run the service
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8001
 ```
 
-- Service: http://localhost:8000
-- Health check: http://localhost:8000/health
-- Interactive API documentation: http://localhost:8000/docs
+- Service: http://localhost:8001
+- Health check: http://localhost:8001/health
+- Interactive API documentation: http://localhost:8001/docs
 
 ## Run the tests
 
