@@ -8,9 +8,9 @@ account recovery and an automated adversarial test suite.
 
 | Module | Topic | Owner |
 |---|---|---|
-| A | Authentication service core | Abdu |
-| B | Sessions, recovery and client | Aziz |
-| C | Adversarial test suite and evaluation | Ibrahim |
+| A | Authentication service core | Abdirahman Ahmed HUSSEIN |
+| B | Sessions, recovery and client | Abdulaziz ALIOGLU |
+| C | Adversarial test suite and evaluation | Ibrahim Said AKINCI |
 
 ## Getting started
 
