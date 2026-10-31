@@ -1,0 +1,30 @@
+# Secrets and local config
+.env
+
+# Local databases (each developer has their own; never commit data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Personal AI-assistant notes (not part of the repository)
+CLAUDE.md
+
+# Office lock files
+.~lock.*
+
+# Supervisor-provided course documents (kept locally, not part of the codebase)
+SENG_*.docx
+SENG_*.pdf
+progressReport.txt
