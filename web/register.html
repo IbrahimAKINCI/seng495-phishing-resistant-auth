@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create an account</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Create an account</h1>
+  <form id="register-form">
+    <label for="username">Username</label>
+    <input id="username" autocomplete="username" required>
+    <p class="muted">3 to 64 characters: letters, numbers, dot, dash, underscore.</p>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="new-password" minlength="12" required>
+    <p class="muted">At least 12 characters.</p>
+    <button id="register-btn" type="submit">Create account</button>
+    <p class="error" id="register-error"></p>
+  </form>
+  <nav><a href="/">Back to log in</a></nav>
+
+  <script src="/app.js"></script>
+  <script src="/friction.js"></script>
+  <script>
+    Friction.start("register", "password");
+    $("register-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.step("click:register");
+      setError("register-error", null);
+      try {
+        await api("/auth/register", { method: "POST", body: { username: $("username").value, password: $("password").value } });
+        Friction.end("registered");
+        location.href = "/?registered=1";
+      } catch (err) { Friction.error(err.status || "register"); setError("register-error", err); }
+    });
+  </script>
+</body>
+</html>

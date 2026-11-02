@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recover your account</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Recover your account</h1>
+
+  <form id="start-form">
+    <p>Use one of your recovery codes. For your safety, recovery takes 24 hours, and the account owner is told at once.</p>
+    <label for="username">Username</label>
+    <input id="username" required>
+    <label for="code">Recovery code</label>
+    <input id="code" placeholder="ABCD-EFGH-JKLM" required>
+    <button id="start-btn" type="submit">Start recovery</button>
+    <p class="error" id="start-error"></p>
+  </form>
+
+  <div id="started-box" class="box hidden">
+    <p class="ok">Recovery started. Save these two values. You need them to finish after <strong id="ready-at"></strong>.</p>
+    <p>Recovery ID: <code id="recovery-id-out"></code></p>
+    <p>Recovery token: <code id="token-out"></code></p>
+  </div>
+
+  <form id="complete-form">
+    <h2>Finish recovery</h2>
+    <label for="recovery-id">Recovery ID</label>
+    <input id="recovery-id" required>
+    <label for="token">Recovery token</label>
+    <input id="token" required>
+    <label for="new-password">New password</label>
+    <input id="new-password" type="password" minlength="12" required>
+    <button id="complete-btn" type="submit">Set new password</button>
+    <p class="error" id="complete-error"></p>
+  </form>
+
+  <nav><a href="/">Back to log in</a></nav>
+
+  <script src="/app.js"></script>
+  <script src="/friction.js"></script>
+  <script>
+    Friction.start("recovery_start", "recovery");
+    $("start-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.step("click:start-recovery");
+      setError("start-error", null);
+      try {
+        const r = await api("/recovery/start", { method: "POST", body: { username: $("username").value, code: $("code").value } });
+        $("ready-at").textContent = fmtTime(r.ready_at);
+        $("recovery-id-out").textContent = r.recovery_id; $("token-out").textContent = r.token;
+        $("recovery-id").value = r.recovery_id; $("token").value = r.token;
+        show("started-box"); show("start-form", false);
+        Friction.end("started");
+      } catch (err) { Friction.error(err.status || "recovery"); setError("start-error", err); }
+    });
+
+    $("complete-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.start("recovery_complete", "recovery");
+      Friction.step("click:complete-recovery");
+      setError("complete-error", null);
+      try {
+        await api("/recovery/complete", { method: "POST", body: { recovery_id: $("recovery-id").value.trim(), token: $("token").value.trim(), new_password: $("new-password").value } });
+        Friction.end("completed");
+        location.href = "/home.html";
+      } catch (err) { Friction.error(err.status || "recovery"); setError("complete-error", err); }
+    });
+  </script>
+</body>
+</html>

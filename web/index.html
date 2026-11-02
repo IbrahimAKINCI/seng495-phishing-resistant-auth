@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1>Log in</h1>
+
+  <form id="password-form">
+    <label for="username">Username</label>
+    <input id="username" autocomplete="username webauthn" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button id="login-btn" type="submit">Log in</button>
+    <p class="error" id="login-error"></p>
+  </form>
+
+  <form id="totp-form" class="hidden">
+    <p>Enter the 6-digit code from your authenticator app.</p>
+    <label for="totp-code">Code</label>
+    <input id="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+    <button id="totp-btn" type="submit">Verify</button>
+    <p class="error" id="totp-error"></p>
+  </form>
+
+  <div class="box">
+    <button id="passkey-btn" class="secondary" type="button">Log in with passkey</button>
+    <p class="error" id="passkey-error"></p>
+  </div>
+
+  <nav><a href="/register.html">Create an account</a> <a href="/recover.html">Lost access?</a></nav>
+
+  <script src="/app.js"></script>
+  <script src="/friction.js"></script>
+  <script>
+    let pendingId = null;
+    Friction.start("login", "password");
+
+    function done() { Friction.end("authenticated"); location.href = "/home.html"; }
+
+    $("password-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.setMethod("password");
+      Friction.step("click:login");
+      setError("login-error", null);
+      try {
+        const r = await api("/session/login/password", { method: "POST", body: { username: $("username").value, password: $("password").value } });
+        if (r.status === "totp_required") {
+          pendingId = r.pending_id;
+          Friction.setMethod("password+totp");
+          show("password-form", false); show("totp-form"); $("totp-code").focus();
+        } else { done(); }
+      } catch (err) { Friction.error(err.status || "login"); setError("login-error", err); }
+    });
+
+    $("totp-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.step("click:verify");
+      setError("totp-error", null);
+      try {
+        await api("/session/login/totp", { method: "POST", body: { pending_id: pendingId, code: $("totp-code").value.trim() } });
+        done();
+      } catch (err) { Friction.error(err.status || "totp"); setError("totp-error", err); $("totp-code").value = ""; }
+    });
+
+    $("passkey-btn").addEventListener("click", async () => {
+      Friction.start("login", "passkey");
+      Friction.step("click:passkey");
+      setError("passkey-error", null);
+      try {
+        const username = $("username").value.trim() || null;
+        const { challenge_id, options } = await api("/auth/webauthn/login/options", { method: "POST", body: { username } });
+        const credential = await getPasskey(options);
+        await api("/session/login/passkey", { method: "POST", body: { challenge_id, credential } });
+        done();
+      } catch (err) { Friction.error(err.name || err.status || "passkey"); setError("passkey-error", err.name === "NotAllowedError" ? "Passkey login was cancelled or no passkey was found." : err); }
+    });
+  </script>
+</body>
+</html>

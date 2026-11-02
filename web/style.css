@@ -1,0 +1,18 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #222; background: #fafafa; }
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .3rem; }
+form, .box { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+label { display: block; margin: .5rem 0 .2rem; font-size: .9rem; }
+input { width: 100%; padding: .5rem; border: 1px solid #bbb; border-radius: 4px; font-size: 1rem; }
+button { margin-top: .8rem; padding: .5rem 1rem; border: 1px solid #333; background: #333; color: #fff; border-radius: 4px; cursor: pointer; font-size: .95rem; }
+button.secondary { background: #fff; color: #333; }
+button.small { margin: 0 0 0 .4rem; padding: .2rem .6rem; font-size: .8rem; }
+.error { color: #b00020; min-height: 1.2em; }
+.ok { color: #1b6e2d; }
+.hidden { display: none; }
+ul { padding-left: 1.2rem; }
+li { margin: .3rem 0; }
+code { background: #eee; padding: .1rem .3rem; border-radius: 3px; word-break: break-all; }
+.muted { color: #666; font-size: .85rem; }
+nav a { margin-right: 1rem; }
