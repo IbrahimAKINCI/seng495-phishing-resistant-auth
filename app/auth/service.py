@@ -172,7 +172,10 @@ def passkey_login_options(db: Session, username: str | None) -> tuple[dict, str]
 
 def passkey_login_verify(db: Session, challenge_id: str, credential: dict, ip: str) -> AuthResult:
     policy = current_policy()
-    if ratelimit.is_blocked(db, "(passkey)", ip):
+    # A failed passkey login is not tied to an account (the credential may be unknown), so
+    # only the per-address limit applies. A shared account key here would let any 5
+    # failures block passkey login for every user (Issue #5).
+    if ratelimit.is_ip_blocked(db, ip):
         raise too_many()
     if not policy.allows("login", "passkey"):
         raise AuthError(403, "This login method is not allowed by the current policy.")

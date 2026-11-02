@@ -231,3 +231,33 @@ def test_registration_challenge_of_another_user_is_rejected(client, authenticato
     cred = authenticator.create(body["options"])
     r = client.post("/auth/webauthn/register/verify", json={"challenge_id": body["challenge_id"], "credential": cred}, headers=as_user(bob))
     assert r.status_code == 400
+
+
+# ---------- FR-A7 for passkeys: failures must not lock out other users (Issue #5) ----------
+
+def test_failed_passkey_logins_from_one_address_do_not_block_other_addresses(client, authenticator):
+    from fastapi.testclient import TestClient
+
+    uid = register(client)
+    add_passkey(client, authenticator, uid)
+
+    attacker = TestClient(client.app, client=("203.0.113.7", 50000))
+    for _ in range(config.RATE_MAX_FAILURES_ACCOUNT + 1):
+        assert attacker.post("/auth/webauthn/login/verify",
+                             json={"challenge_id": "x" * 43, "credential": {}}).status_code in (400, 401, 422)
+
+    # alice, on another address, still logs in with her passkey
+    alice = TestClient(client.app, client=("198.51.100.20", 50000))
+    opts = passkey_options(alice, "alice")
+    r = passkey_verify(alice, opts["challenge_id"], authenticator.get(opts["options"]))
+    assert r.status_code == 200, r.text
+
+
+def test_one_address_is_still_blocked_after_too_many_passkey_failures(client):
+    from fastapi.testclient import TestClient
+
+    attacker = TestClient(client.app, client=("203.0.113.7", 50000))
+    codes = [attacker.post("/auth/webauthn/login/verify",
+                           json={"challenge_id": "x" * 43, "credential": {}}).status_code
+             for _ in range(config.RATE_MAX_FAILURES_IP + 1)]
+    assert codes[-1] == 429

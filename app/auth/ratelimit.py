@@ -32,6 +32,12 @@ def is_blocked(db: Session, username: str, ip: str) -> bool:
     )
 
 
+def is_ip_blocked(db: Session, ip: str) -> bool:
+    """Only the per-address limit. Used where the account is not known yet, such as a
+    passkey login that fails before the credential is matched to a user."""
+    return _blocked(db, FailedAttempt.ip, ip, config.RATE_MAX_FAILURES_IP, clock.now())
+
+
 def record_failure(db: Session, username: str, ip: str) -> None:
     db.add(FailedAttempt(username=username.lower(), ip=ip, at=clock.now()))
     # keep the table small
