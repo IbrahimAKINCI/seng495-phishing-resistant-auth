@@ -83,11 +83,11 @@ pull request. The result shows as a green check or a red cross on the pull reque
 
 | Week | Module A | Module B | Module C |
 | --- | --- | --- | --- |
-| 5 | Registration, Argon2id password login | Session issue and validation | Results recorder, statistics, server timing log |
-| 6 | TOTP with time window and reuse prevention | Client screens for registration and login | OTP replay test |
+| 5 | Registration, Argon2id password login | Session issue and validation | *Results recorder, statistics, server timing log: to do* |
+| 6 | TOTP with time window and reuse prevention | Client screens for registration and login | *OTP replay test: to do* |
 | 7 | Passkey registration, challenge and origin checks | Expiry, revocation, logout across devices | *Session fixation and token reuse tests: to do* |
-| 8 | Passkey login, checked with Chrome's virtual authenticator | Recovery flow and its threat | Origin mismatch test |
-| 9 | Origin check shown in a real browser | Revoked session rejected on every endpoint | First results table |
+| 8 | Passkey login, checked with Chrome's virtual authenticator | Recovery flow and its threat | *Origin mismatch test: to do* |
+| 9 | Origin check shown in a real browser | Revoked session rejected on every endpoint | *First results table: to do* |
 | 10 | Rate limiting | *Fatigue scenario: to do* | *Friction measurements: to do* |
 | 11 | Credential management | Recovery hardening | *Server time measurements: to do* |
 
