@@ -1,0 +1,6 @@
+{
+  "name": "passkey_with_fallback",
+  "operations": {
+    "login": { "methods": ["password+totp", "passkey"], "require_uv": false }
+  }
+}
