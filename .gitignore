@@ -31,5 +31,6 @@ CLAUDE.md
 
 # Supervisor-provided course documents (kept locally, not part of the codebase)
 SENG_*.docx
+/*.docx
 SENG_*.pdf
 progressReport.txt
