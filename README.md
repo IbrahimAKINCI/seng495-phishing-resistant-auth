@@ -54,11 +54,23 @@ pytest tests_e2e           # real Chrome, all three methods (Week 9 gate)
 python -m attacks.report   # table of attack results
 ```
 
+### Continuous integration (CI)
+
+GitHub Actions (`.github/workflows/tests.yml`) runs `pytest -q` on every push and every
+pull request. The result shows as a green check or a red cross on the pull request.
+
+- Which folders run is set by `testpaths` in `pytest.ini`. A new test folder must be added there.
+- Keep slow measurement campaigns out of CI: they are scripts, run by hand.
+- An attack test that exposes a known, still open bug is marked
+  `@pytest.mark.xfail(reason="Issue #N")`, so CI stays green and the finding stays on record.
+- Merge a pull request only when its CI check is green.
+
 ## Repository rules
 
 - Never commit `.env` or any `.db` file.
 - Every member commits to this repository from the first week; contribution is assessed from the history.
 - Results in reports are produced by scripts, never typed by hand.
+- Parts of the code and documentation were written with the help of an AI assistant (Claude Code). The team reviewed all of it and is responsible for it.
 
 ## How the modules connect (Section 8 of the requirements)
 
@@ -72,11 +84,11 @@ python -m attacks.report   # table of attack results
 
 | Week | Module A | Module B | Module C |
 | --- | --- | --- | --- |
-| 5 | Registration, Argon2id password login | Session issue and validation | Results recorder, statistics, server timing log |
-| 6 | TOTP with time window and reuse prevention | Client screens for registration and login | OTP replay test |
+| 5 | Registration, Argon2id password login | Session issue and validation | *Results recorder, statistics, server timing log: to do* |
+| 6 | TOTP with time window and reuse prevention | Client screens for registration and login | *OTP replay test: to do* |
 | 7 | Passkey registration, challenge and origin checks | Expiry, revocation, logout across devices | *Session fixation and token reuse tests: to do* |
-| 8 | Passkey login, checked with Chrome's virtual authenticator | Recovery flow and its threat | Origin mismatch test |
-| 9 | Origin check shown in a real browser | Revoked session rejected on every endpoint | First results table |
+| 8 | Passkey login, checked with Chrome's virtual authenticator | Recovery flow and its threat | *Origin mismatch test: to do* |
+| 9 | Origin check shown in a real browser | Revoked session rejected on every endpoint | *First results table: to do* |
 | 10 | Rate limiting | *Fatigue scenario: to do* | *Friction measurements: to do* |
 | 11 | Credential management | Recovery hardening | *Server time measurements: to do* |
 
