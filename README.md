@@ -54,6 +54,17 @@ pytest tests_e2e           # real Chrome, all three methods (Week 9 gate)
 python -m attacks.report   # table of attack results
 ```
 
+### Continuous integration (CI)
+
+GitHub Actions (`.github/workflows/tests.yml`) runs `pytest -q` on every push and every
+pull request. The result shows as a green check or a red cross on the pull request.
+
+- Which folders run is set by `testpaths` in `pytest.ini`. A new test folder must be added there.
+- Keep slow measurement campaigns out of CI: they are scripts, run by hand.
+- An attack test that exposes a known, still open bug is marked
+  `@pytest.mark.xfail(reason="Issue #N")`, so CI stays green and the finding stays on record.
+- Merge a pull request only when its CI check is green.
+
 ## Repository rules
 
 - Never commit `.env` or any `.db` file.
