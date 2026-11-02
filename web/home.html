@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your account</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <h1 id="welcome">Welcome</h1>
+  <p class="muted" id="session-info"></p>
+  <button id="logout-btn" class="secondary" type="button">Log out</button>
+  <button id="logout-all-btn" class="secondary" type="button">Log out of all devices</button>
+
+  <h2>Passkeys</h2>
+  <ul id="passkey-list"></ul>
+  <form id="passkey-form">
+    <label for="passkey-name">Name for the new passkey</label>
+    <input id="passkey-name" value="My device" maxlength="64">
+    <button id="add-passkey-btn" type="submit">Add passkey</button>
+    <p class="error" id="passkey-error"></p>
+  </form>
+
+  <h2>Authenticator app (TOTP)</h2>
+  <p id="totp-status"></p>
+  <button id="totp-start-btn" type="button">Set up authenticator app</button>
+  <button id="totp-remove-btn" class="secondary hidden" type="button">Remove authenticator app</button>
+  <form id="totp-form" class="hidden">
+    <p>Scan this QR code with your authenticator app, then enter the code it shows.</p>
+    <img id="totp-qr" alt="QR code" width="200" height="200">
+    <p class="muted">Cannot scan? Use this link: <code id="totp-uri"></code></p>
+    <label for="totp-code">Code</label>
+    <input id="totp-code" inputmode="numeric" maxlength="6" required>
+    <button id="totp-confirm-btn" type="submit">Confirm</button>
+    <p class="error" id="totp-error"></p>
+  </form>
+
+  <h2>Password</h2>
+  <p id="password-status"></p>
+  <button id="password-remove-btn" class="secondary" type="button">Remove password (use passkeys only)</button>
+  <p class="error" id="password-error"></p>
+
+  <h2>Active sessions</h2>
+  <ul id="session-list"></ul>
+
+  <h2>Recovery codes</h2>
+  <p id="codes-status"></p>
+  <button id="codes-btn" type="button">Create new recovery codes</button>
+  <div id="codes-box" class="box hidden">
+    <p>Save these codes somewhere safe. Each works once. They will not be shown again.</p>
+    <ul id="codes-list"></ul>
+  </div>
+  <div id="pending-box" class="box hidden">
+    <p class="error">Someone started recovering this account. If it was not you, cancel it.</p>
+    <ul id="pending-list"></ul>
+  </div>
+
+  <h2>Notifications</h2>
+  <ul id="notification-list"></ul>
+
+  <script src="/app.js"></script>
+  <script src="/friction.js"></script>
+  <script>
+    function li(text, buttons = []) {
+      const el = document.createElement("li");
+      el.textContent = text;
+      for (const [label, fn, id] of buttons) {
+        const b = document.createElement("button");
+        b.className = "small secondary"; b.type = "button"; b.textContent = label; if (id) b.id = id;
+        b.addEventListener("click", fn);
+        el.appendChild(b);
+      }
+      return el;
+    }
+
+    async function refresh() {
+      const me = await loadSession();
+      $("welcome").textContent = `Welcome, ${me.username}`;
+      $("session-info").textContent = `Logged in with ${me.methods.join(" + ")}. Session ends after 30 minutes without activity, and at the latest ${fmtTime(me.expires_at)}.`;
+
+      const creds = await api("/auth/credentials");
+      const pl = $("passkey-list"); pl.innerHTML = "";
+      if (!creds.passkeys.length) pl.appendChild(li("No passkeys yet."));
+      for (const p of creds.passkeys) {
+        pl.appendChild(li(`${p.name} (added ${fmtTime(p.created_at)})`, [
+          ["Rename", async () => { const n = prompt("New name", p.name); if (n) { await api(`/auth/credentials/passkeys/${p.id}`, { method: "PATCH", body: { name: n } }); refresh(); } }],
+          ["Delete", async () => { try { await api(`/auth/credentials/passkeys/${p.id}`, { method: "DELETE" }); refresh(); } catch (err) { setError("passkey-error", err); } }, `delete-passkey-${p.id}`],
+        ]));
+      }
+      $("totp-status").textContent = creds.totp ? "Active." : "Not set up.";
+      show("totp-start-btn", !creds.totp); show("totp-remove-btn", creds.totp);
+      $("password-status").textContent = creds.password ? "Set." : "No password. You log in with passkeys.";
+      show("password-remove-btn", creds.password);
+
+      const sl = $("session-list"); sl.innerHTML = "";
+      for (const s of await api("/session/list")) {
+        sl.appendChild(li(`${s.current ? "This session" : "Other session"}: ${s.methods.join(" + ")}, last active ${fmtTime(s.last_seen_at)}`,
+          s.current ? [] : [["End", async () => { await api(`/session/${s.session_id}`, { method: "DELETE" }); refresh(); }]]));
+      }
+
+      const rec = await api("/recovery/status");
+      $("codes-status").textContent = `${rec.codes_left} unused recovery codes.`;
+      show("pending-box", rec.pending.length > 0);
+      const pend = $("pending-list"); pend.innerHTML = "";
+      for (const r of rec.pending) {
+        pend.appendChild(li(`Started ${fmtTime(r.created_at)}, can complete after ${fmtTime(r.ready_at)}`,
+          [["Cancel recovery", async () => { await api(`/recovery/cancel/${r.recovery_id}`, { method: "POST" }); refresh(); }, "cancel-recovery-btn"]]));
+      }
+
+      const nl = $("notification-list"); nl.innerHTML = "";
+      for (const n of await api("/recovery/notifications")) nl.appendChild(li(`${fmtTime(n.at)}: ${n.message}`));
+    }
+
+    refresh().catch((err) => { if (err.status === 401) location.href = "/"; else alert(err.message); });
+
+    $("logout-btn").addEventListener("click", async () => { await api("/session/logout", { method: "POST" }); location.href = "/"; });
+    $("logout-all-btn").addEventListener("click", async () => { await api("/session/logout-all", { method: "POST" }); location.href = "/"; });
+
+    $("passkey-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.start("passkey_enrol", "passkey");
+      Friction.step("click:add-passkey");
+      setError("passkey-error", null);
+      try {
+        const { challenge_id, options } = await api("/auth/webauthn/register/options", { method: "POST" });
+        const credential = await createPasskey(options);
+        await api("/auth/webauthn/register/verify", { method: "POST", body: { challenge_id, credential, name: $("passkey-name").value } });
+        Friction.end("added");
+        refresh();
+      } catch (err) { Friction.error(err.name || err.status || "passkey"); setError("passkey-error", err); }
+    });
+
+    $("totp-start-btn").addEventListener("click", async () => {
+      Friction.start("totp_enrol", "password+totp");
+      Friction.step("click:totp-start");
+      const r = await api("/auth/totp/enroll/start", { method: "POST" });
+      $("totp-qr").src = `data:image/png;base64,${r.qr_png_base64}`;
+      $("totp-uri").textContent = r.otpauth_uri;
+      show("totp-form"); show("totp-start-btn", false);
+    });
+
+    $("totp-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      Friction.step("click:totp-confirm");
+      setError("totp-error", null);
+      try {
+        await api("/auth/totp/enroll/confirm", { method: "POST", body: { code: $("totp-code").value.trim() } });
+        Friction.end("active");
+        show("totp-form", false); $("totp-code").value = "";
+        refresh();
+      } catch (err) { Friction.error(err.status || "totp"); setError("totp-error", err); }
+    });
+
+    $("totp-remove-btn").addEventListener("click", async () => { await api("/auth/credentials/totp", { method: "DELETE" }); refresh(); });
+
+    $("password-remove-btn").addEventListener("click", async () => {
+      setError("password-error", null);
+      try { await api("/auth/credentials/password", { method: "DELETE" }); refresh(); } catch (err) { setError("password-error", err); }
+    });
+
+    $("codes-btn").addEventListener("click", async () => {
+      const { codes } = await api("/recovery/codes", { method: "POST" });
+      const cl = $("codes-list"); cl.innerHTML = "";
+      for (const c of codes) { const el = document.createElement("li"); el.innerHTML = `<code>${c}</code>`; cl.appendChild(el); }
+      show("codes-box");
+      refresh();
+    });
+  </script>
+</body>
+</html>
