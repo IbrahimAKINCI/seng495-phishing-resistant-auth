@@ -70,6 +70,7 @@ pull request. The result shows as a green check or a red cross on the pull reque
 - Never commit `.env` or any `.db` file.
 - Every member commits to this repository from the first week; contribution is assessed from the history.
 - Results in reports are produced by scripts, never typed by hand.
+- Parts of the code and documentation were written with the help of an AI assistant (Claude Code). The team reviewed all of it and is responsible for it.
 
 ## How the modules connect (Section 8 of the requirements)
 
