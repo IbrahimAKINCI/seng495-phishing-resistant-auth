@@ -1,0 +1,6 @@
+{
+  "name": "permissive",
+  "operations": {
+    "login": { "methods": ["password", "password+totp", "passkey"], "require_uv": false }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "passkey_only",
+  "operations": {
+    "login": { "methods": ["passkey"], "require_uv": true }
+  }
+}
