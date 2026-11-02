@@ -5,6 +5,11 @@
 *.db
 *.sqlite
 *.sqlite3
+instance/
+
+# Generated results (produced by scripts, re-run to get them)
+results/*.jsonl
+results/evidence/
 
 # Python
 .venv/
