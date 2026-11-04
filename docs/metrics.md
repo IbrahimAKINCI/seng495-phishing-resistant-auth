@@ -1,6 +1,6 @@
 # Metrics and measurement definitions (Module C)
 
-Status: **draft, written on 3 November 2026 as catch-up for the Week 3 task** ("define the metrics precisely: attack outcome, friction in steps and seconds, server processing time"). The Week 4 requirement specification that the team submitted is not in this repository, so this document is written from the project description, the supervisor's requirements review, and the code that Module B already wrote (`web/friction.js`, `app/friction/logs.py`). When the two disagree, the specification is aligned to the agreed text, not the other way round, and the difference is recorded in "Open decisions" below.
+Status: **written on 3 November 2026 as catch-up for the Week 3 task, updated on 4 November 2026 after the specification arrived** ("define the metrics precisely: attack outcome, friction in steps and seconds, server processing time"). The Week 4 requirement specification that the team submitted is not in this repository, so this document is written from the project description, the supervisor's requirements review, and the code that Module B already wrote (`web/friction.js`, `app/friction/logs.py`). When the two disagree, the specification is aligned to the agreed text, not the other way round, and the difference is recorded in "Open decisions" below.
 
 The three quantities the project reports for every authentication method are the **attack outcome**, the **user friction** and the **server processing time**. Every number in the final report is produced by a script from these definitions. Nothing is typed into a table by hand.
 
@@ -67,10 +67,14 @@ The harness passes `?run=<id>` to the client so its runs match the friction even
 
 ## 7. Validation of the measurement code
 
-The statistics code is tested against cases whose correct answer is known independently of the code: for example the median of `[1, 2, 3, 4, 5]` is 3, the nearest-rank 95th percentile of the numbers 1 to 20 is 19, and the bootstrap interval of a constant sample is a single point. These tests go in `tests_c/` (not written yet) and will run in CI. Slow measurement campaigns are scripts, not tests, and stay out of CI because they take minutes and CI machines are too noisy for timings.
+The statistics code is tested against cases whose correct answer is known independently of the code: for example the median of `[1, 2, 3, 4, 5]` is 3, the nearest-rank 95th percentile of the numbers 1 to 20 is 19, and the bootstrap interval of a constant sample is a single point. These tests are in `tests_c/` (`test_stats.py`, `test_logs.py`) and run in CI. Slow measurement campaigns are scripts, not tests, and stay out of CI because they take minutes and CI machines are too noisy for timings.
 
-## 8. Open decisions
+## 8. Decisions
 
-1. **Step rule for the authenticator and the one-time code app** (Section 3): proposed here; to be agreed with Module B, who wrote the browser side.
-2. **Warm-up:** whether the first run per flow (Argon2id and import costs) is discarded and reported separately. Proposed: one warm-up run, reported, not counted in the 20.
-3. **Numbering:** these metrics are not yet mapped to FR-C numbers of the specification.
+The revised requirements specification arrived on 4 November 2026 and settles the points that were open in the first draft of this document:
+
+1. **Step rule:** the specification's rule (Section 7.1) is the same as Section 3 above (button, filled field, QR scan, authenticator prompt, opening the TOTP app: 1 step each; page loads and waiting are not steps). Expected counts from the rule: password 3, password + TOTP 6, passkey 2.
+2. **Warm-up:** one warm-up run per flow and method, not counted among the 20 measured runs (FR-C4, Section 7.2).
+3. **Resamples:** 10,000 (Section 7.2). `harness/stats.py` uses 10,000 by default with a fixed seed.
+4. **Numbering:** the mapping to FR-C numbers is in `docs/requirements_c.md`.
+5. **Still open:** the warm-up run is dropped from the statistics but must still be saved in the result file, marked as warm-up, so it can be reported separately. The format of that mark is decided when the campaign script is written (Week 10).
