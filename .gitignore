@@ -34,3 +34,11 @@ SENG_*.docx
 /*.docx
 SENG_*.pdf
 progressReport.txt
+
+# Documents are kept locally and are not committed (the repository is public).
+# Only README.md is tracked.
+*.docx
+*.pdf
+*.md
+!README.md
+!README_C.md
