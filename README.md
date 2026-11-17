@@ -10,7 +10,7 @@ an automated adversarial test suite.
 | --- | --- | --- | --- |
 | A | Authentication service core | Abdirahman Ahmed HUSSEIN | `app/auth/`, `policy/`, `tests/` |
 | B | Sessions, recovery and client | Abdulaziz ALIOGLU | `app/sessions/`, `app/recovery/`, `app/friction/`, `web/`, `tests_b/` |
-| C | Adversarial test suite and evaluation | Ibrahim Said AKINCI | `attacks/`, `tests/test_stats.py` |
+| C | Adversarial test suite and evaluation | Ibrahim Said AKINCI | `attacks/`, `harness/`, `tests_c/` (see `README_C.md`) |
 
 Shared: `app/main.py`, `tests_e2e/`, `requirements.txt`, `pytest.ini`, `.github/`.
 
@@ -50,8 +50,9 @@ pytest                     # everything
 pytest tests               # Module A
 pytest tests_b             # Module B
 pytest attacks             # Module C attacks
+pytest tests_c             # Module C tools (statistics, log readers)
 pytest tests_e2e           # real Chrome, all three methods (Week 9 gate)
-python -m attacks.report   # table of attack results
+python -m harness.report   # table of attack results (Module C)
 ```
 
 ### Continuous integration (CI)
