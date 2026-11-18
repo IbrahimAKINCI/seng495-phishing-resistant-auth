@@ -38,6 +38,40 @@ def test_run_summary_uses_the_step_rule_and_counts():
     assert r1.complete
 
 
+def _event(event, method, t, flow="login", run_id="r"):
+    return {"run_id": run_id, "flow": flow, "method": method, "event": event, "t_ms": t, "detail": ""}
+
+
+def test_a_password_totp_login_is_labelled_password_totp():
+    # Issue #19: the client starts the login as "password" and switches the method to
+    # "password+totp" when the service asks for the code. The run is a password+totp run.
+    rows = [_event("flow_start", "password", 0), _event("step", "password", 5),
+            _event("step", "password+totp", 900), _event("step", "password+totp", 1500),
+            _event("flow_end", "password+totp", 2000)]
+    run = logs.friction_runs(rows)[0]
+    assert run.method == "password+totp"
+    assert run.steps == 3
+
+
+def test_a_run_id_with_two_flows_is_an_error_not_a_merged_run():
+    # Issue #20: a failed password login followed by a passkey login on the same page
+    # shares one run_id. The harness must open a new page (a new ?run=) for every run,
+    # and a mistake here must stop the measurement instead of giving a wrong number.
+    rows = [_event("flow_start", "password", 0), _event("step", "password", 5),
+            _event("error", "password", 800),
+            _event("flow_start", "passkey", 0), _event("step", "passkey", 5),
+            _event("flow_end", "passkey", 600)]
+    with pytest.raises(logs.LogFormatError, match="run_id 'r'"):
+        logs.friction_runs(rows)
+
+
+def test_two_different_run_ids_are_two_runs():
+    rows = [_event("flow_start", "password", 0, run_id="a"), _event("flow_end", "password", 500, run_id="a"),
+            _event("flow_start", "passkey", 0, run_id="b"), _event("flow_end", "passkey", 300, run_id="b")]
+    assert [(r.run_id, r.method, r.elapsed_ms) for r in logs.friction_runs(rows)] == [
+        ("a", "password", 500), ("b", "passkey", 300)]
+
+
 def test_a_run_with_an_error_is_counted_but_not_complete():
     r2 = {r.run_id: r for r in logs.friction_runs(FRICTION)}["r2"]
     assert r2.errors == 1 and r2.elapsed_ms == 600
