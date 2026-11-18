@@ -58,3 +58,34 @@ def test_main_writes_the_file(tmp_path):
     assert report.main(["report", str(source), str(target)]) == 0
     assert "| replay | password |" in target.read_text(encoding="utf-8")
     assert report.main(["report", str(tmp_path / "none.jsonl"), str(target)]) == 1
+
+
+# ---------- Issue #21: the table must show results from a modified working tree ----------
+
+def test_header_marks_results_from_a_tree_with_uncommitted_changes():
+    r = row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00")
+    r["dirty"] = True
+    text = report.build_table([r])
+    assert "Commit: abcdef1 (uncommitted changes: not reproducible from this commit)" in text
+
+
+def test_header_shows_a_clean_commit_plainly():
+    r = row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00")
+    r["dirty"] = False
+    text = report.build_table([r])
+    assert "- Commit: abcdef1\n" in text and "uncommitted" not in text
+
+
+def test_results_recorded_before_the_dirty_field_existed_are_marked():
+    text = report.build_table([row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00")])
+    assert "abcdef1 (dirty state not recorded)" in text
+
+
+def test_main_warns_when_a_result_came_from_a_modified_tree(tmp_path, capsys):
+    import json
+    r = row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00")
+    r["dirty"] = True
+    source = tmp_path / "in.jsonl"
+    source.write_text(json.dumps(r) + "\n", encoding="utf-8")
+    assert report.main(["report", str(source), str(tmp_path / "t.md")]) == 0
+    assert "Warning" in capsys.readouterr().out

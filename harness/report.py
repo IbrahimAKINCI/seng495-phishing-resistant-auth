@@ -24,11 +24,23 @@ def latest_per_pair(rows: list[dict]) -> list[dict]:
     return list(latest.values())
 
 
+def commit_label(row: dict) -> str:
+    """The commit of a result, with a warning when the code that ran was not that commit
+    (Issue #21). Rows recorded before the `dirty` field existed are marked as unknown."""
+    commit = row["commit"][:7]
+    dirty = row.get("dirty")
+    if dirty is True:
+        return f"{commit} (uncommitted changes: not reproducible from this commit)"
+    if dirty is None:
+        return f"{commit} (dirty state not recorded)"
+    return commit
+
+
 def build_table(rows: list[dict]) -> str:
     if not rows:
         raise ValueError("no attack results to report")
     used = latest_per_pair(rows)
-    commits = sorted({r["commit"][:7] for r in used})
+    commits = sorted({commit_label(r) for r in used})
     machines = sorted({r["machine"]["os"] + ", " + str(r["machine"]["cpu_count"]) + " CPUs, Python "
                        + r["machine"]["python"] for r in used})
     lines = [
@@ -61,6 +73,9 @@ def main(argv: list[str]) -> int:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(build_table(rows), encoding="utf-8")
     print(f"Wrote {target} ({len(latest_per_pair(rows))} rows)")
+    if any(r.get("dirty") is not False for r in latest_per_pair(rows)):
+        print("Warning: some results come from a working tree with uncommitted changes (or the "
+              "state was not recorded). They cannot be reproduced from the commit named in the table.")
     return 0
 
 
