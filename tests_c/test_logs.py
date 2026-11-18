@@ -94,3 +94,44 @@ def test_read_jsonl_reads_lines_and_reports_bad_ones(tmp_path):
     bad.write_text('{"a": 1}\nnot json\n', encoding="utf-8")
     with pytest.raises(logs.LogFormatError):
         logs.read_jsonl(bad)
+
+
+# ---------- Issue #19: the method comes from the end of the run ----------
+
+def ev(run_id, flow, method, event, t):
+    return {"run_id": run_id, "flow": flow, "method": method, "event": event, "t_ms": t, "detail": ""}
+
+
+def test_password_totp_login_is_labelled_password_totp():
+    # web/index.html starts the flow as "password" and switches to "password+totp"
+    rows = [ev("r", "login", "password", "flow_start", 0), ev("r", "login", "password", "step", 5),
+            ev("r", "login", "password+totp", "step", 900), ev("r", "login", "password+totp", "step", 1500),
+            ev("r", "login", "password+totp", "flow_end", 2000)]
+    run = logs.friction_runs(rows)[0]
+    assert run.method == "password+totp"
+    assert run.steps == 3
+
+
+def test_method_of_a_run_without_flow_end_is_its_last_event():
+    rows = [ev("r", "login", "password", "flow_start", 0), ev("r", "login", "password+totp", "step", 900)]
+    assert logs.friction_runs(rows)[0].method == "password+totp"
+
+
+# ---------- Issue #20: one flow per run_id ----------
+
+def test_two_flows_under_one_run_id_are_rejected():
+    # a password attempt that fails, then "Log in with passkey" on the same page
+    rows = [ev("r", "login", "password", "flow_start", 0), ev("r", "login", "password", "step", 5),
+            ev("r", "login", "password", "error", 800),
+            ev("r", "login", "passkey", "flow_start", 0), ev("r", "login", "passkey", "step", 5),
+            ev("r", "login", "passkey", "flow_end", 600)]
+    with pytest.raises(logs.LogFormatError, match="2 flows"):
+        logs.friction_runs(rows)
+
+
+def test_separate_run_ids_give_separate_runs():
+    rows = [ev("a", "login", "password", "flow_start", 0), ev("a", "login", "password", "error", 800),
+            ev("b", "login", "passkey", "flow_start", 0), ev("b", "login", "passkey", "flow_end", 600)]
+    runs = {r.run_id: r for r in logs.friction_runs(rows)}
+    assert runs["a"].method == "password" and not runs["a"].complete
+    assert runs["b"].method == "passkey" and runs["b"].complete and runs["b"].elapsed_ms == 600

@@ -70,6 +70,15 @@ def friction_runs(rows: list[dict], extra_steps: dict[str, int] | None = None) -
                   `step` events or passed in extra_steps = {run_id: count}.
     keystrokes  = number of `keystroke` events.
     elapsed_ms  = t_ms of flow_end minus t_ms of flow_start.
+    method      = the method of the run's last event, normally flow_end (issue #19): the
+                  client can change the method during a flow, for example from "password"
+                  to "password+totp" when the service asks for a code.
+
+    A run_id must hold exactly one flow (issue #20). The client keeps one run_id for a
+    whole page, so a page where the user tries a password and then a passkey has two
+    flow_start events under one run_id. Adding them up would give wrong numbers without
+    any warning, so such a run is rejected. The measurement harness opens a new page with
+    a new ?run=<id> for every measured run.
     """
     by_run: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
@@ -79,13 +88,18 @@ def friction_runs(rows: list[dict], extra_steps: dict[str, int] | None = None) -
     result = []
     for run_id, events in by_run.items():
         starts = [e["t_ms"] for e in events if e["event"] == "flow_start"]
+        if len(starts) > 1:
+            raise LogFormatError(
+                f"friction: run {run_id!r} holds {len(starts)} flows; "
+                "give every measured run its own ?run=<id> (one flow per run)"
+            )
         ends = [e["t_ms"] for e in events if e["event"] == "flow_end"]
         errors = sum(e["event"] == "error" for e in events)
         elapsed = (ends[-1] - starts[0]) if starts and ends else None
         result.append(RunSummary(
             run_id=run_id,
             flow=events[0]["flow"],
-            method=events[0]["method"],
+            method=next((e["method"] for e in reversed(events) if e["event"] == "flow_end"), events[-1]["method"]),
             steps=sum(e["event"] == "step" for e in events) + extra_steps.get(run_id, 0),
             keystrokes=sum(e["event"] == "keystroke" for e in events),
             errors=errors,
