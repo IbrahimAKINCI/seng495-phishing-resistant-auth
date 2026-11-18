@@ -5,6 +5,7 @@ against answers worked out by hand."""
 import math
 import random
 from dataclasses import dataclass
+from fractions import Fraction
 from statistics import median as _median
 
 DEFAULT_RESAMPLES = 10_000
@@ -17,17 +18,41 @@ def median(values: list[float]) -> float:
     return float(_median(values))
 
 
+def _exact(x: float | int | Fraction) -> Fraction:
+    """x as an exact fraction. A float is read from its shortest decimal text, so 2.5
+    means exactly 5/2 and 0.95 means exactly 95/100. Floating point arithmetic is not
+    used for ranks: it can push an exact whole number just above the integer, and ceil
+    then picks the next rank (Issue #18)."""
+    return x if isinstance(x, Fraction) else Fraction(str(x))
+
+
+def nearest_rank(n: int, p: float | int | Fraction) -> int:
+    """Rank (1 to n) of the p-th percentile in n sorted values: ceil(p * n / 100)."""
+    p = _exact(p)
+    if not 0 < p <= 100:
+        raise ValueError("p must be in (0, 100]")
+    return max(1, math.ceil(p * n / 100))
+
+
 def percentile(values: list[float], p: float) -> float:
     """Nearest-rank percentile: the value at rank ceil(p/100 * n) in the sorted data.
 
     With 20 runs the 95th percentile is the 19th smallest value."""
     if not values:
         raise ValueError("percentile of an empty sample")
-    if not 0 < p <= 100:
-        raise ValueError("p must be in (0, 100]")
     ordered = sorted(values)
-    rank = max(1, math.ceil(p / 100 * len(ordered)))
-    return float(ordered[rank - 1])
+    return float(ordered[nearest_rank(len(ordered), p) - 1])
+
+
+def ci_ranks(resamples: int, confidence: float = 0.95) -> tuple[int, int]:
+    """Ranks of the lower and upper end of a bootstrap interval.
+
+    For 95% and 10,000 resamples: 2.5% of 10,000 is rank 250 and 97.5% is rank 9,750."""
+    confidence = _exact(confidence)
+    if not 0 < confidence < 1:
+        raise ValueError("confidence must be between 0 and 1")
+    alpha = (1 - confidence) / 2 * 100
+    return nearest_rank(resamples, alpha), nearest_rank(resamples, 100 - alpha)
 
 
 def bootstrap_ci_median(values: list[float], resamples: int = DEFAULT_RESAMPLES,
@@ -44,9 +69,9 @@ def bootstrap_ci_median(values: list[float], resamples: int = DEFAULT_RESAMPLES,
         raise ValueError("bootstrap of an empty sample")
     rng = random.Random(seed)
     n = len(values)
-    medians = [_median(rng.choices(values, k=n)) for _ in range(resamples)]
-    alpha = (1 - confidence) / 2 * 100
-    return percentile(medians, alpha), percentile(medians, 100 - alpha)
+    medians = sorted(_median(rng.choices(values, k=n)) for _ in range(resamples))
+    low_rank, high_rank = ci_ranks(resamples, confidence)
+    return float(medians[low_rank - 1]), float(medians[high_rank - 1])
 
 
 def intervals_overlap(a: tuple[float, float], b: tuple[float, float]) -> bool:

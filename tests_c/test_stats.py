@@ -31,6 +31,46 @@ def test_nearest_rank_other_percentiles():
     assert stats.percentile([3, 1, 2], 95) == 3         # ceil(2.85) = 3
 
 
+def test_nearest_rank_agrees_with_integer_arithmetic_for_every_whole_p_and_n():
+    # Independent check (Issue #18): the rank is ceil(p * n / 100), written here with
+    # integer division only, so no floating point is involved. In the data 1..n the value
+    # k sits at rank k, so the value returned is the rank itself.
+    for n in range(1, 201):
+        data = list(range(1, n + 1))
+        for p in range(1, 101):
+            assert stats.percentile(data, p) == -(-p * n // 100), (p, n)
+
+
+def test_nearest_rank_cases_that_floating_point_got_wrong():
+    # Worked out by hand: p * n / 100 is a whole number, so the rank is exactly that number.
+    # 28 * 25 / 100 = 7, 56 * 25 / 100 = 14, 14 * 50 / 100 = 7, 68 * 75 / 100 = 51.
+    # With floats, math.ceil(28 / 100 * 25) is 8.
+    for p, n, rank in [(28, 25, 7), (56, 25, 14), (14, 50, 7), (68, 75, 51)]:
+        assert stats.percentile(list(range(1, n + 1)), p) == rank
+
+
+def test_bootstrap_interval_uses_ranks_250_and_9750_of_10000():
+    # 2.5% of 10,000 resamples is exactly 250, and 97.5% is exactly 9,750 (Issue #18).
+    assert stats.ci_ranks(10_000, 0.95) == (250, 9750)
+    assert stats.ci_ranks(1000, 0.95) == (25, 975)
+    assert stats.ci_ranks(200, 0.90) == (10, 190)
+
+
+def test_bootstrap_returns_the_values_at_those_ranks(monkeypatch):
+    # Replace the random draw so that resample number i has median i. The sorted medians
+    # are then 1, 2, ..., 10000 and the interval must be (250, 9750) exactly.
+    class Counting:
+        def __init__(self, seed):
+            self.count = 0
+
+        def choices(self, values, k):
+            self.count += 1
+            return [float(self.count)] * k
+
+    monkeypatch.setattr(stats.random, "Random", Counting)
+    assert stats.bootstrap_ci_median([1.0, 2.0, 3.0], resamples=10_000) == (250.0, 9750.0)
+
+
 def test_percentile_rejects_bad_input():
     with pytest.raises(ValueError):
         stats.percentile([], 95)

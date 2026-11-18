@@ -70,6 +70,14 @@ def friction_runs(rows: list[dict], extra_steps: dict[str, int] | None = None) -
                   `step` events or passed in extra_steps = {run_id: count}.
     keystrokes  = number of `keystroke` events.
     elapsed_ms  = t_ms of flow_end minus t_ms of flow_start.
+    method      = the method on the last event of the run. The client starts a login as
+                  "password" and switches to "password+totp" when the code is asked for
+                  (Issue #19), so the first event can name the wrong method.
+
+    A run_id must hold exactly one flow (Issue #20). The client makes one run_id per page
+    load, so the harness opens a new page with a new ?run= for every measured run. If a
+    run_id has more than one flow_start, LogFormatError is raised: merging two flows would
+    give wrong numbers without any warning.
     """
     by_run: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
@@ -80,12 +88,16 @@ def friction_runs(rows: list[dict], extra_steps: dict[str, int] | None = None) -
     for run_id, events in by_run.items():
         starts = [e["t_ms"] for e in events if e["event"] == "flow_start"]
         ends = [e["t_ms"] for e in events if e["event"] == "flow_end"]
+        if len(starts) > 1:
+            raise LogFormatError(
+                f"friction: run_id {run_id!r} has {len(starts)} flow_start events; "
+                "every measured run needs its own ?run= id")
         errors = sum(e["event"] == "error" for e in events)
         elapsed = (ends[-1] - starts[0]) if starts and ends else None
         result.append(RunSummary(
             run_id=run_id,
             flow=events[0]["flow"],
-            method=events[0]["method"],
+            method=events[-1]["method"],
             steps=sum(e["event"] == "step" for e in events) + extra_steps.get(run_id, 0),
             keystrokes=sum(e["event"] == "keystroke" for e in events),
             errors=errors,

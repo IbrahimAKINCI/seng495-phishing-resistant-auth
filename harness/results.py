@@ -12,12 +12,31 @@ RESULTS_DIR = Path(os.environ.get("HARNESS_RESULTS_DIR", "results"))
 ATTACK_FILE = "attack_results.jsonl"
 
 
-def commit_hash() -> str:
+def _git(args: list[str], cwd: Path | str | None) -> subprocess.CompletedProcess | None:
     try:
-        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
-        return out.stdout.strip() or "unknown"
+        return subprocess.run(["git", *args], capture_output=True, text=True, timeout=10, cwd=cwd)
     except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def commit_hash(cwd: Path | str | None = None) -> str:
+    out = _git(["rev-parse", "HEAD"], cwd)
+    if out is None or out.returncode != 0:
         return "unknown"
+    return out.stdout.strip() or "unknown"
+
+
+def working_tree_dirty(cwd: Path | str | None = None) -> bool:
+    """True when the code that ran is not exactly the commit named in the result (Issue #21).
+
+    Any changed tracked file or any new file that Git does not ignore counts. Results files
+    are ignored by .gitignore, so writing them does not make the tree dirty. If Git cannot
+    tell (not a repository, git missing) the answer is True: a result must never claim to
+    be reproducible when that cannot be shown."""
+    out = _git(["status", "--porcelain"], cwd)
+    if out is None or out.returncode != 0:
+        return True
+    return bool(out.stdout.strip())
 
 
 def machine_spec() -> dict:
@@ -29,8 +48,9 @@ def machine_spec() -> dict:
     }
 
 
-def run_metadata(parameters: dict | None = None) -> dict:
-    return {"commit": commit_hash(), "parameters": parameters or {}, "machine": machine_spec()}
+def run_metadata(parameters: dict | None = None, cwd: Path | str | None = None) -> dict:
+    return {"commit": commit_hash(cwd), "dirty": working_tree_dirty(cwd),
+            "parameters": parameters or {}, "machine": machine_spec()}
 
 
 def record_attack(attack: str, method: str, expected: str, actual: str, detail: str = "",
