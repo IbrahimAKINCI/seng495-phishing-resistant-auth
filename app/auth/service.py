@@ -38,9 +38,14 @@ class TotpRequired:
 
 def register(db: Session, username: str, password: str) -> User:
     username = (username or "").strip().lower()
+    # Format errors are answered at once: the rules are public, so this reveals nothing
+    # about which accounts exist.
     if not USERNAME_RE.match(username) or passwords.check_password_rules(password or ""):
         raise AuthError(400, REGISTRATION_FAILED)
     if db.scalar(select(User).where(User.username == username)) is not None:
+        # Issue #6: hash the password anyway, so a taken username takes as long as a
+        # new one and the response time does not reveal that the account exists.
+        passwords.hash_password(password)
         raise AuthError(400, REGISTRATION_FAILED)
     user = User(
         username=username,
