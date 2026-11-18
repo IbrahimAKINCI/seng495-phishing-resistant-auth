@@ -5,6 +5,7 @@ against answers worked out by hand."""
 import math
 import random
 from dataclasses import dataclass
+from fractions import Fraction
 from statistics import median as _median
 
 DEFAULT_RESAMPLES = 10_000
@@ -17,17 +18,28 @@ def median(values: list[float]) -> float:
     return float(_median(values))
 
 
-def percentile(values: list[float], p: float) -> float:
+def _exact(x: float | Fraction) -> Fraction:
+    """The number as an exact fraction. Floats go through their decimal text, so 5.1
+    becomes exactly 51/10 and not the binary value just below it."""
+    return x if isinstance(x, Fraction) else Fraction(str(x))
+
+
+def nearest_rank(p: float | Fraction, n: int) -> int:
+    """ceil(p/100 * n), computed exactly (issue #18). In floating point, 28/100 * 25 is
+    7.000000000000001 and the ceiling becomes 8 instead of 7."""
+    return max(1, math.ceil(_exact(p) * n / 100))
+
+
+def percentile(values: list[float], p: float | Fraction) -> float:
     """Nearest-rank percentile: the value at rank ceil(p/100 * n) in the sorted data.
 
     With 20 runs the 95th percentile is the 19th smallest value."""
     if not values:
         raise ValueError("percentile of an empty sample")
-    if not 0 < p <= 100:
+    if not 0 < _exact(p) <= 100:
         raise ValueError("p must be in (0, 100]")
     ordered = sorted(values)
-    rank = max(1, math.ceil(p / 100 * len(ordered)))
-    return float(ordered[rank - 1])
+    return float(ordered[nearest_rank(p, len(ordered)) - 1])
 
 
 def bootstrap_ci_median(values: list[float], resamples: int = DEFAULT_RESAMPLES,
@@ -45,7 +57,9 @@ def bootstrap_ci_median(values: list[float], resamples: int = DEFAULT_RESAMPLES,
     rng = random.Random(seed)
     n = len(values)
     medians = [_median(rng.choices(values, k=n)) for _ in range(resamples)]
-    alpha = (1 - confidence) / 2 * 100
+    # Exact arithmetic (issue #18): in floating point (1 - 0.95) / 2 * 100 is
+    # 2.500000000000002, which moved the lower bound from rank 250 to 251 of 10,000.
+    alpha = (1 - _exact(confidence)) / 2 * 100
     return percentile(medians, alpha), percentile(medians, 100 - alpha)
 
 

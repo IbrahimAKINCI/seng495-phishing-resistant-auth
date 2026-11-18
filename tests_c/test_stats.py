@@ -86,3 +86,35 @@ def test_summary_of_1_to_20():
     s = stats.summarize([float(x) for x in range(1, 21)])
     assert (s.n, s.median, s.p95) == (20, 10.5, 19)
     assert s.ci_low <= s.median <= s.ci_high
+
+
+# ---------- Issue #18: exact ranks ----------
+
+@pytest.mark.parametrize("p, n, rank", [(28, 25, 7), (56, 25, 14), (14, 50, 7), (68, 75, 51), (7, 100, 7)])
+def test_nearest_rank_cases_that_floating_point_got_wrong(p, n, rank):
+    # rank = ceil(p * n / 100) worked out by hand: 28*25/100 = 7 exactly, and so on
+    assert stats.nearest_rank(p, n) == rank
+    assert stats.percentile(list(range(1, n + 1)), p) == rank
+
+
+def test_nearest_rank_matches_integer_arithmetic_for_every_whole_p_and_n():
+    for p in range(1, 101):
+        for n in range(1, 201):
+            assert stats.nearest_rank(p, n) == max(1, (p * n + 99) // 100), (p, n)
+
+
+def test_decimal_percentiles_are_exact():
+    assert stats.nearest_rank(5.1, 20) == 2      # 5.1 * 20 / 100 = 1.02 -> 2
+    assert stats.nearest_rank(2.5, 10_000) == 250
+    assert stats.nearest_rank(97.5, 10_000) == 9750
+
+
+def test_bootstrap_bounds_are_ranks_250_and_9750_of_10000():
+    import random
+    from statistics import median
+
+    data = [12.1, 9.8, 15.3, 11.0, 10.4, 13.7, 9.9, 14.2, 10.8, 12.6]
+    # the same resampling, done here independently, then sorted
+    rng = random.Random(stats.DEFAULT_SEED)
+    medians = sorted(median(rng.choices(data, k=len(data))) for _ in range(10_000))
+    assert stats.bootstrap_ci_median(data) == (medians[250 - 1], medians[9750 - 1])
