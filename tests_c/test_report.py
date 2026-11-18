@@ -58,3 +58,43 @@ def test_main_writes_the_file(tmp_path):
     assert report.main(["report", str(source), str(target)]) == 0
     assert "| replay | password |" in target.read_text(encoding="utf-8")
     assert report.main(["report", str(tmp_path / "none.jsonl"), str(target)]) == 1
+
+
+# ---------- Issue #21: results from uncommitted code ----------
+
+def test_header_says_the_tree_was_clean():
+    r = {**row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00"), "dirty": False}
+    assert "Working tree: clean" in report.build_table([r])
+
+
+def test_header_warns_about_results_from_uncommitted_code():
+    r = {**row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00"), "dirty": True}
+    text = report.build_table([r])
+    assert "**uncommitted changes** in 1 of 1 results" in text
+    assert "cannot be reproduced" in text
+
+
+def test_old_results_without_the_field_are_marked_unknown():
+    text = report.build_table([row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00")])
+    assert "Working tree: unknown" in text
+
+
+def test_default_table_is_refused_for_dirty_results_unless_allowed(tmp_path, monkeypatch):
+    import json
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "in.jsonl"
+    source.write_text(json.dumps({**row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00"),
+                                  "dirty": True}) + "\n", encoding="utf-8")
+    assert report.main(["report", str(source)]) == 2
+    assert not report.DEFAULT_OUT.exists()
+    assert report.main(["report", str(source), "--allow-dirty"]) == 0
+    assert "uncommitted changes" in report.DEFAULT_OUT.read_text(encoding="utf-8")
+
+
+def test_default_table_is_written_for_clean_results(tmp_path, monkeypatch):
+    import json
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "in.jsonl"
+    source.write_text(json.dumps({**row("x", "password", "blocked", "blocked", "2026-11-04T10:00:00+00:00"),
+                                  "dirty": False}) + "\n", encoding="utf-8")
+    assert report.main(["report", str(source)]) == 0

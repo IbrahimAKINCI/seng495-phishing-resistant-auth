@@ -12,12 +12,27 @@ RESULTS_DIR = Path(os.environ.get("HARNESS_RESULTS_DIR", "results"))
 ATTACK_FILE = "attack_results.jsonl"
 
 
-def commit_hash() -> str:
+def commit_hash(cwd: Path | None = None) -> str:
     try:
-        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10, cwd=cwd)
         return out.stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError):
         return "unknown"
+
+
+def working_tree_dirty(cwd: Path | None = None) -> bool | None:
+    """True when the working tree has changes that are not committed (modified, staged or
+    new files that are not ignored), False when it is clean, None when git cannot tell.
+
+    Issue #21: a result from a dirty tree names a commit that does not contain the code
+    that produced it, so it cannot be reproduced from that commit (NFR-5)."""
+    try:
+        out = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, timeout=10, cwd=cwd)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return bool(out.stdout.strip())
 
 
 def machine_spec() -> dict:
@@ -30,7 +45,8 @@ def machine_spec() -> dict:
 
 
 def run_metadata(parameters: dict | None = None) -> dict:
-    return {"commit": commit_hash(), "parameters": parameters or {}, "machine": machine_spec()}
+    return {"commit": commit_hash(), "dirty": working_tree_dirty(), "parameters": parameters or {},
+            "machine": machine_spec()}
 
 
 def record_attack(attack: str, method: str, expected: str, actual: str, detail: str = "",
