@@ -83,7 +83,8 @@ def test_fallback_policy_needs_totp_for_password_login(client):
     register(client, "bob")
     totp = enrol_totp(client, alice)
     use_policy("passkey_with_fallback")
-    assert password_login(client, "bob").status_code == 403  # password only: not allowed
+    # password only is not allowed; answered like a wrong password (issue #7, no oracle)
+    assert password_login(client, "bob").status_code == 401
     r = password_login(client, "alice")  # password + TOTP: allowed
     assert r.status_code == 200 and r.json()["status"] == "totp_required"
     r = client.post("/auth/login/totp", json={"pending_id": r.json()["pending_id"], "code": totp.at(clock.now())})

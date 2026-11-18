@@ -60,6 +60,18 @@ class Challenge(Base):
     used: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class RequestEvent(Base):
+    """Issue #7: one row per limited request (registration, passkey options), counted
+    per key such as "register:<ip>". Kept apart from failed logins so these requests
+    never count towards the FR-A7 login limits."""
+
+    __tablename__ = "request_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(128), index=True)
+    at: Mapped[float] = mapped_column(Float, index=True)
+
+
 class FailedAttempt(Base):
     """FR-A7: one row per failed login, counted per account and per IP address."""
 

@@ -30,6 +30,11 @@ RATE_BLOCK_SECONDS = 15 * 60
 RATE_MAX_FAILURES_ACCOUNT = 5
 RATE_MAX_FAILURES_IP = 20
 
+# Issue #7: requests that cost the server work or storage, limited per IP address in the
+# same 15-minute window. Registration runs Argon2id; passkey options store a challenge.
+REGISTER_MAX_PER_IP = 20
+PASSKEY_OPTIONS_MAX_PER_IP = 60
+
 # FR-A5 / Section 4.2: WebAuthn
 RP_ID = os.environ.get("AUTH_RP_ID", "localhost")
 RP_NAME = "SENG Auth Service"

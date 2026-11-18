@@ -7,7 +7,7 @@ import re
 import secrets
 from dataclasses import dataclass, field
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from . import config, passwords, ratelimit, totp, webauthn_service
@@ -17,6 +17,7 @@ from .models import Challenge, Passkey, TotpSecret, User
 from .policy import current_policy
 
 USERNAME_RE = re.compile(r"^[a-z0-9_.-]{3,64}$")
+POLICY_REFUSED = "This login method is not allowed by the current policy."
 
 
 @dataclass
@@ -36,7 +37,10 @@ class TotpRequired:
 
 # ---------- FR-A1 / FR-A2: registration ----------
 
-def register(db: Session, username: str, password: str) -> User:
+def register(db: Session, username: str, password: str, ip: str = "unknown") -> User:
+    # Issue #7: every registration runs Argon2id, so limit how many one address can send
+    if not ratelimit.allow(db, f"register:{ip}", config.REGISTER_MAX_PER_IP):
+        raise too_many()
     username = (username or "").strip().lower()
     # Format errors are answered at once: the rules are public, so this reveals nothing
     # about which accounts exist.
@@ -73,6 +77,11 @@ def _find_user(db: Session, username: str) -> User | None:
 
 def login_password(db: Session, username: str, password: str, ip: str) -> AuthResult | TotpRequired:
     username = (username or "").strip().lower()
+    policy = current_policy()
+    # Issue #7: when the policy allows no password login at all (passkey_only), refuse
+    # before the password is checked, so a right and a wrong password get the same answer.
+    if not (policy.allows("login", "password") or policy.allows("login", "password+totp")):
+        raise AuthError(403, POLICY_REFUSED)
     if ratelimit.is_blocked(db, username, ip):
         raise too_many()
 
@@ -86,11 +95,15 @@ def login_password(db: Session, username: str, password: str, ip: str) -> AuthRe
         user.password_hash = passwords.hash_password(password)
         db.commit()
 
-    policy = current_policy()
     has_totp = user.totp is not None and user.totp.active
     method = "password+totp" if has_totp else "password"
     if not policy.allows("login", method):
-        raise AuthError(403, "This login method is not allowed by the current policy.")
+        # Issue #7: the password was right, but this account's method is not allowed
+        # (for example a password-only account under passkey_with_fallback). Answer and
+        # count it exactly like a wrong password, so neither the response nor the point
+        # where the account gets blocked tells an attacker the password was correct.
+        ratelimit.record_failure(db, username, ip)
+        raise login_failed()
 
     if has_totp:
         pending = Challenge(
@@ -123,8 +136,18 @@ def login_totp(db: Session, pending_id: str, code: str, ip: str) -> AuthResult:
         ratelimit.record_failure(db, user.username, ip)
         raise login_failed()
 
-    secret_row.last_used_step = step
-    pending.used = True
+    # Same race as the passkey challenge (issue #7): record the code's step and use up the
+    # pending login in single UPDATEs, so two requests sent together cannot both succeed.
+    code_claimed = db.execute(
+        update(TotpSecret).where(TotpSecret.user_id == user.id, TotpSecret.last_used_step < step)
+        .values(last_used_step=step)
+    ).rowcount == 1
+    pending_claimed = db.execute(
+        update(Challenge).where(Challenge.id == pending.id, Challenge.used.is_(False)).values(used=True)
+    ).rowcount == 1
+    if not (code_claimed and pending_claimed):
+        db.rollback()
+        raise login_failed()
     db.commit()
     return AuthResult(user_id=user.id, username=user.username, methods=["password", "totp"])
 
@@ -169,7 +192,10 @@ def passkey_register_verify(db: Session, user: User, challenge_id: str, credenti
     )
 
 
-def passkey_login_options(db: Session, username: str | None) -> tuple[dict, str]:
+def passkey_login_options(db: Session, username: str | None, ip: str = "unknown") -> tuple[dict, str]:
+    # Issue #7: every call stores a challenge, so limit how many one address can ask for
+    if not ratelimit.allow(db, f"passkey-options:{ip}", config.PASSKEY_OPTIONS_MAX_PER_IP):
+        raise too_many()
     user = _find_user(db, username) if username else None
     # An unknown username gets usernameless options, so the response does not reveal whether it exists
     return webauthn_service.login_options(db, user, current_policy().rule("login").require_uv)
@@ -183,7 +209,7 @@ def passkey_login_verify(db: Session, challenge_id: str, credential: dict, ip: s
     if ratelimit.is_ip_blocked(db, ip):
         raise too_many()
     if not policy.allows("login", "passkey"):
-        raise AuthError(403, "This login method is not allowed by the current policy.")
+        raise AuthError(403, POLICY_REFUSED)
     try:
         passkey, uv = webauthn_service.login_verify(db, challenge_id, credential, policy.rule("login").require_uv)
     except AuthError:
