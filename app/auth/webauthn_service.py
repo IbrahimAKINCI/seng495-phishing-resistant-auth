@@ -19,7 +19,7 @@ Each check has a negative test in tests/test_webauthn.py."""
 import json
 import secrets
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from webauthn import (
     base64url_to_bytes,
@@ -62,13 +62,19 @@ def _new_challenge(db: Session, ceremony: str, user_id: int | None) -> Challenge
 def consume_challenge(db: Session, challenge_id: str, ceremony: str) -> Challenge | None:
     """Checks 1-3. The challenge is marked used before the response is verified,
     so even a failed attempt cannot be retried with the same challenge."""
-    ch = db.get(Challenge, challenge_id)
-    if ch is None or ch.ceremony != ceremony:
-        return None  # check 1: not a challenge we issued for this ceremony
-    if ch.used:
-        return None  # check 2
-    ch.used = True
+    # Issue #7: checking `used` and setting it are one atomic UPDATE. With a separate
+    # read and write, two requests arriving together could both see used = False and
+    # both use the same challenge. Now only the request whose UPDATE changes the row wins.
+    result = db.execute(
+        update(Challenge)
+        .where(Challenge.id == challenge_id, Challenge.ceremony == ceremony, Challenge.used.is_(False))
+        .values(used=True)
+    )
     db.commit()
+    if result.rowcount != 1:
+        return None  # check 1 (not issued by us for this ceremony) or check 2 (already used)
+    ch = db.get(Challenge, challenge_id)
+    db.refresh(ch)
     if clock.now() > ch.expires_at:
         return None  # check 3
     return ch

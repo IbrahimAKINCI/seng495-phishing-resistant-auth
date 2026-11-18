@@ -56,6 +56,13 @@ class Rename(BaseModel):
 
 
 def _ip(request: Request) -> str:
+    """The address every per-IP limit uses (FR-A7 and issue #7).
+
+    Known limit: this is the address of whoever opened the connection. Behind a reverse
+    proxy or load balancer that is the proxy, so all users would share one address and
+    one limit. The service does not read X-Forwarded-For, because any client can set that
+    header. If the service is ever deployed behind a proxy, take the address the proxy
+    reports (for example uvicorn --proxy-headers --forwarded-allow-ips=<proxy address>)."""
     return request.client.host if request.client else "unknown"
 
 
@@ -76,8 +83,8 @@ def auth_error_handler(_request: Request, exc: AuthError) -> JSONResponse:
 # ---------- registration and login ----------
 
 @router.post("/register", status_code=201)
-def register(body: Credentials, db: Session = Depends(get_db)):
-    user = service.register(db, body.username, body.password)
+def register(body: Credentials, request: Request, db: Session = Depends(get_db)):
+    user = service.register(db, body.username, body.password, _ip(request))
     return {"user_id": user.id, "username": user.username}
 
 
@@ -94,8 +101,8 @@ def login_totp(body: TotpLogin, request: Request, db: Session = Depends(get_db))
 
 
 @router.post("/webauthn/login/options")
-def passkey_login_options(body: PasskeyLoginOptions, db: Session = Depends(get_db)):
-    options, challenge_id = service.passkey_login_options(db, body.username)
+def passkey_login_options(body: PasskeyLoginOptions, request: Request, db: Session = Depends(get_db)):
+    options, challenge_id = service.passkey_login_options(db, body.username, _ip(request))
     return {"challenge_id": challenge_id, "options": options}
 
 

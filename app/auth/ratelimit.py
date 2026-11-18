@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from . import config
 from .clock import clock
-from .models import FailedAttempt
+from .models import FailedAttempt, RequestEvent
 
 
 def _blocked(db: Session, column, value: str, limit: int, now: float) -> bool:
@@ -52,3 +52,18 @@ def failure_count(db: Session, username: str) -> int:
             FailedAttempt.username == username.lower(), FailedAttempt.at >= since
         )
     )
+
+
+def allow(db: Session, key: str, limit: int) -> bool:
+    """Issue #7: a simple counter for requests that cost work or storage (registration,
+    passkey options). Returns False when `key` already made `limit` requests in the last
+    15 minutes; otherwise records this request and returns True."""
+    now = clock.now()
+    since = now - config.RATE_WINDOW_SECONDS
+    used = db.scalar(select(func.count()).select_from(RequestEvent).where(RequestEvent.key == key, RequestEvent.at >= since))
+    if used >= limit:
+        return False
+    db.add(RequestEvent(key=key, at=now))
+    db.execute(delete(RequestEvent).where(RequestEvent.at < now - 24 * 3600))
+    db.commit()
+    return True

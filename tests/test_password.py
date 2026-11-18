@@ -114,3 +114,35 @@ def test_failures_spread_over_more_than_15_minutes_do_not_block(client):
         login(client, "alice", "wrong password here")
         clock.advance(4 * 60)  # 5 failures over 20 minutes
     assert login(client, "alice", PASSWORD).status_code == 200
+
+
+# ---------- Issue #6: registration must not reveal existing usernames by timing ----------
+
+def test_taken_username_still_runs_the_password_hash(client, monkeypatch):
+    from app.auth import passwords
+
+    register(client, "alice")
+    calls = []
+    real = passwords.hash_password
+    monkeypatch.setattr(passwords, "hash_password", lambda p: calls.append(p) or real(p))
+    r = client.post("/auth/register", json={"username": "alice", "password": PASSWORD})
+    assert r.status_code == 400
+    assert len(calls) == 1  # the same Argon2id work as a new registration
+
+
+def test_taken_and_new_username_take_about_the_same_time(client):
+    import statistics
+    import time
+
+    register(client, "alice")
+
+    def timed(username):
+        started = time.perf_counter()
+        client.post("/auth/register", json={"username": username, "password": PASSWORD})
+        return time.perf_counter() - started
+
+    taken = [timed("alice") for _ in range(8)]
+    new = [timed(f"new-user-{i}") for i in range(8)]
+    # Both paths are dominated by one Argon2id hash. Before the fix the taken-username
+    # path skipped it and took a few percent of the time of a new registration.
+    assert statistics.median(taken) > 0.5 * statistics.median(new)

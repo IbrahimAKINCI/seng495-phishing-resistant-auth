@@ -99,3 +99,13 @@ Numbers from the requirements: `app/auth/config.py`, `app/sessions/config.py`,
 `app/recovery/service.py`. Environment variables: `DATABASE_URL`, `TOTP_ENC_KEY`,
 `AUTH_RP_ID`, `AUTH_EXPECTED_ORIGIN`, `AUTH_POLICY_PATH`, `AUTH_RESULTS_DIR`,
 `SESSION_COOKIE_SECURE`.
+
+## Known limits
+
+- **Client address behind a proxy.** Every per-address limit (failed logins, registration,
+  passkey options) uses the address of whoever opened the connection
+  (`request.client.host`, see `_ip` in `app/auth/router.py`). Behind a reverse proxy or
+  load balancer that is the proxy, so all users would share one address and one limit.
+  The service does not read `X-Forwarded-For`, because any client can set that header.
+  If it is ever deployed behind a proxy, run uvicorn with
+  `--proxy-headers --forwarded-allow-ips=<proxy address>` so the real address is used.
