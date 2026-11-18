@@ -32,10 +32,13 @@ def _free_port() -> int:
 
 
 @contextmanager
-def running_service(policy: str = "default"):
-    """Yields a RunningService. `policy` is the name of a file in policy/ (without .json)."""
+def running_service(policy: str = "default", host: str = "127.0.0.1"):
+    """Yields a RunningService. `policy` is the name of a file in policy/ (without .json).
+    `host` is the name the client uses for the service (and the WebAuthn RP ID). A browser
+    refuses an IP address as RP ID, so browser tests pass "localhost". The server itself
+    always listens on 127.0.0.1 only."""
     port = _free_port()
-    base_url = f"http://127.0.0.1:{port}"
+    base_url = f"http://{host}:{port}"
     with tempfile.TemporaryDirectory(prefix="attack-service-", ignore_cleanup_errors=True) as tmp:
         tmp_path = Path(tmp)
         env = {
@@ -43,7 +46,7 @@ def running_service(policy: str = "default"):
             "AUTH_INSTANCE_DIR": str(tmp_path),
             "AUTH_DATABASE_URL": f"sqlite:///{(tmp_path / 'service.db').as_posix()}",
             "TOTP_ENC_KEY": base64.b64encode(os.urandom(32)).decode(),
-            "AUTH_RP_ID": "127.0.0.1",
+            "AUTH_RP_ID": host,
             "AUTH_EXPECTED_ORIGIN": base_url,
             "AUTH_RESULTS_DIR": str(tmp_path / "results"),
             "AUTH_POLICY_PATH": str(ROOT / "policy" / f"{policy}.json"),
